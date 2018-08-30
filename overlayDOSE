@@ -1,0 +1,70 @@
+function overlayDOSE(all,dose,forLabels,slmin,slmax,middle_index,offset_dicom,UData,MF,name,varargin)
+
+    if ~isempty(varargin)
+        tumor=varargin{1,1};
+    end
+    
+    if ~isfield(dose,'coord')
+        
+        wd=dose.width;
+        sd=dose.start+offset_dicom;
+        dd=dose.dimensions;
+
+        fprintf('DOSE OVERLAY -> Magic Factor: [%g %g %g]\n',MF);    
+
+
+        forDoseLabels.x = sd(1) + (0:1:dd(1)-1)*wd(1)-MF(1);
+        forDoseLabels.y = sd(2) + (0:1:dd(2)-1)*wd(2)-MF(2);
+        forDoseLabels.z = sd(3) + (0:1:dd(3)-1)*wd(3)-MF(3);
+    else
+        forDoseLabels=dose.coord;
+    end
+    [ X,  Y,  Z] = meshgrid(forDoseLabels.x,forDoseLabels.y,forDoseLabels.z);
+    [Xq, Yq, Zq] = meshgrid(forLabels.x,forLabels.y,forLabels.z);
+
+    % interpolation to ct grid
+    dose.dataInterp = interp3(X,Y,Z,dose.data,Xq,Yq,Zq,'linear',0);
+
+    climB=[0,max(all(:))];
+    alpha=0.4;
+    cmappp='jet';
+    
+    
+    m=max(dose.dataInterp(:));
+    climF = [m*0.3, m];
+    if m==0
+        climF = [0.00001, 1];
+    end
+
+    
+    titlee=strcat('Dose Overlay (', name,')');
+    
+    hfig_dose = figure('name',titlee,'NumberTitle','off');
+    haxes_dose=axes;
+
+    % for each dicom slice
+    hsl_slide = uicontrol('Style','slider','Min',slmin,'Max',slmax,...
+                    'SliderStep',[1 1]./(slmax-slmin),'Value',middle_index,...
+                    'Position',[20 0 200 20]);
+    % for dose level
+    hsl_dose = uicontrol('Style','slider','Min',0.00001,'Max',0.999999,...
+                    'SliderStep',[0.01 0.01],'Value',0.3,...
+                    'Position',[230 0 200 20]);
+
+    imoverlay_my(all(:,:,middle_index),dose.dataInterp(:,:,middle_index),climF,climB,cmappp,...
+                 alpha,haxes_dose,forLabels,forLabels.z(middle_index),UData,tumor(:,:,middle_index));
+
+    set(hsl_slide,'Callback',@(hObject,eventdata) imoverlay_my(all(:,:,round(hsl_slide.Value)),...
+                                                         dose.dataInterp(:,:,round(hsl_slide.Value)),...
+                                                         [climF(2)*hsl_dose.Value climF(2)],climB,cmappp,alpha,haxes_dose,...
+                                                         forLabels, forLabels.z(round(hsl_slide.Value)),...
+                                                         UData,tumor(:,:,round(hsl_slide.Value))),...
+            'DeleteFcn',@(hObject,eventdata) forLabels.z(round(hsl_slide.Value))...                                                    
+    );                        
+    set(hsl_dose,'Callback',@(hObject,eventdata) imoverlay_my(all(:,:,round(hsl_slide.Value)),...
+                                                         dose.dataInterp(:,:,round(hsl_slide.Value)),...
+                                                         [climF(2)*hsl_dose.Value climF(2)],climB,cmappp,alpha,haxes_dose,...
+                                                         forLabels, forLabels.z(round(hsl_slide.Value)),...
+                                                         UData,tumor(:,:,round(hsl_slide.Value))),...
+            'DeleteFcn',@(hObject,eventdata) forLabels.z(round(hsl_slide.Value))...                                                    
+    );
